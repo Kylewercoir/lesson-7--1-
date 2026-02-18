@@ -150,9 +150,8 @@ function buildRandomBox() {
         }, scene);
     } 
     else {
-        mesh = BABYLON.MeshBuilder.CreateTorus("torus", { 
-            diameter: size, 
-            thickness: size / 4 
+        mesh = BABYLON.MeshBuilder.CreateTriangle("triangle", { 
+            size: size, 
         }, scene);
     }
 
