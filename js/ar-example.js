@@ -35,15 +35,15 @@ const createScene = async function() {
     /* MESHES
     ---------------------------------------------------------------------------------------------------- */
     // STEP 1: Create a simple box, and apply a material and a colour to it.
-    const box = BABYLON.MeshBuilder.CreateBox("box", { size: 0.5 }, scene);
+    const box = BABYLON.MeshBuilder.CreateBox("box", {size: 0.5}, scene);
     const boxMat = new BABYLON.StandardMaterial("boxMat", scene);
-    boxMat.diffuseColor = new BABYLON.StandardMaterial("boxMat", scene);
     boxMat.diffuseColor = new BABYLON.Color3(1, 0.5, 0);
     box.material = boxMat;
     // STEP 4: Move the box so it is not at your feet
-    
+    box.position.x = 1;
+    box.position.z = 2;
     // STEP 4b: It is embedded in the floor - bring it up 0.25
-    
+    box.position.y = 0.25;
 
 
     /* SOUNDS
@@ -59,14 +59,12 @@ const createScene = async function() {
     // STEP 2a: Start a WebXR session (immersive-ar, specifically)
     const xr = await scene.createDefaultXRExperienceAsync({
         uiOptions: {
-            sessionStorage: "immersive-ar",
-            
-            // STEP 2b: We need 0, 0, 0 to be a space on the floor, not between your eyes! There are several types of reference spaces: viewer, local, local-floor, bounded-floor, and unbounded (https://developer.mozilla.org/en-US/docs/Web/API/XRReferenceSpace)
-            ReferencespaceType: "local-floor",
-            
+            sessionMode: "immersive-ar",
+            // STEP 2b: We need 0, 0, 0 to be a space on the floor, not between your eyes! There are several types of reference spaces: viewer, local, local-floor, bounded-floor, and unbounded (https://develoxper.mozilla.org/en-US/docs/Web/API/XRReferenceSpace)
+            referenceSpaceType: "local-floor"
         },
         // STEP 2c: Meta Quest requires these to be explicitly requested
-        
+        optionalFeatures: ["hit-test", "anchors"]
     });
     // STEP 3: Commit your code and push it to a server, then try it out with a headset - notice how the orange box is right at your feet - 0, 0, 0 is located on the floor at your feet
 
@@ -75,68 +73,107 @@ const createScene = async function() {
     ---------------------------------------------------------------------------------------------------- */
     // STEP 5: A hit-test is a standard feature in AR that permits a ray to be cast from the device (headset or phone) into the real world, and detect where it intersects with a real-world object. This enables AR apps to place objects on surfaces or walls of the real world (https://immersive-web.github.io/hit-test/). To enable hit-testing, use the enableFeature() method of the featuresManager from the base WebXR experience helper.
     // STEP 5a: Create the features manager object
-    
+    const fm = xr.baseExperience.featuresManager;
     // STEP 5b: Enable the hit-test feature
-    
+    const hitTest = fm.enableFeature(BABYLON.WebXRHitTest, "latest");
 
     // STEP 6a: Create a marker to show where a hit-test has registered a surface
-     
+    const marker = BABYLON.MeshBuilder.CreateCylinder("marker", { diameter: 0.15, height: 0.01 }, scene);
 
     // STEP 6b: Initialize the Quaternion so the hit-test can control rotation in all dimensions
-    
+    marker.rotationQuaternion = new BABYLON.Quaternion();
     // STEP 6c: Make the marker invisible by default
-    
+    marker.isVisible = false;
     // STEP 6d: Colour the marker
-    
+    const markerMat = new BABYLON.StandardMaterial("markerMat", scene);
+    markerMat.diffuseColor = new BABYLON.Color3(0, 1, 0);
+    markerMat.alpha = 0.5;
+    marker.material = markerMat;
 
     // STEP 7a: Create a variable to store the latest hit-test results
-    
+    let lastHitTest;
     // STEP 7b: Add an event listener for the hit-test results
-    
+    hitTest.onHitTestResultObservable.add((results) => {
         // STEP 7c: If there is a successful hit-test, then make the marker visible
-        
-            
+        if (results.length) {
+            marker.isVisible = true;
             // STEP 7d: Grab the hit-test matrix of coordinates
-            
+            lastHitTest = results[0];
             // STEP 7e: Extract what we need so that the marker is oriented properly on the detected surface
-            
+            lastHitTest.transformationMatrix.decompose(undefined, marker.rotationQuaternion, marker.position);
+        } else {    
             // STEP 7f: Otherwise, marker is invisible
-        
-    
+            marker.isVisible = false;
+        }
+    });
 
     /* ANCHORS
     ---------------------------------------------------------------------------------------------------- */
     // STEP 8: Anchors are a feature that allow you to place objects in the real world space and have them stay there, even if the observer moves around. To enable anchors, use the enableFeature() method of the featuresManager from the base WebXR experience helper (https://immersive-web.github.io/anchors/).
     // STEP 8a: Enable the anchor feature
-    
+    const anchorSystem = fm.enableFeature(BABYLON.WebXRAnchorSystem, "latest");
     // STEP 8b: Add event listener for click
-    
-        
+    scene.onPointerDown = async () => {
+        if (lastHitTest && marker.isVisible) {
             // STEP 8c: Create an anchor point based on the last hit-test coordinates
-            
+            const anchor = await anchorSystem.addAnchorPointUsingHitTestResultAsync(lastHitTest);
             // STEP 8d: Build a box to drop on the surface
-            
+            const box = buildRandomBox();
             // STEP 8e: Attach the box to the real world!
-            
-        
+            anchor.attachedNode = box;
+        }    
+    }    
     
     
     // Function to create a randomly-coloured box mesh
-    function buildRandomBox() {
-        const box = BABYLON.MeshBuilder.CreateBox("box", { size: 0.1 }, scene);
-        // Move the box geometry up by half its height (0.05) and "freeze" that as the new zero point so the box is not embedded in the surface
-        box.position.y = 0.05; 
-        box.bakeCurrentTransformIntoVertices();
-        // Colour the box
-        const boxMat = new BABYLON.StandardMaterial("boxMat", scene);
-        boxMat.diffuseColor = new BABYLON.Color3(Math.random(), Math.random(), Math.random());
-        box.material = boxMat;
-        return box;
+// Function to create a randomly-sized, randomly-coloured shape
+function buildRandomBox() {
+
+    // Random size (not too big or too small)
+    const size = Math.random() * (0.2 - 0.05) + 0.05;
+
+    // Random shape selection
+    const shapeChoice = Math.floor(Math.random() * 4);
+
+    let mesh;
+
+    if (shapeChoice === 0) {
+        mesh = BABYLON.MeshBuilder.CreateBox("box", { size: size }, scene);
+    } 
+    else if (shapeChoice === 1) {
+        mesh = BABYLON.MeshBuilder.CreateSphere("sphere", { diameter: size }, scene);
+    } 
+    else if (shapeChoice === 2) {
+        mesh = BABYLON.MeshBuilder.CreateCylinder("cylinder", { 
+            height: size, 
+            diameter: size 
+        }, scene);
+    } 
+    else {
+        mesh = BABYLON.MeshBuilder.CreateTorus("torus", { 
+            diameter: size, 
+            thickness: size / 4 
+        }, scene);
     }
 
-    // Return the scene
-    return scene;
-};
+    // Lift object so it is not embedded in surface
+    mesh.position.y = size / 2;
+
+    // Freeze that position like your original code
+    mesh.bakeCurrentTransformIntoVertices();
+
+    // Random colour (same style as your original)
+    const boxMat = new BABYLON.StandardMaterial("boxMat", scene);
+    boxMat.diffuseColor = new BABYLON.Color3(
+        Math.random(),
+        Math.random(),
+        Math.random()
+    );
+
+    mesh.material = boxMat;
+
+    return mesh;
+}
 
 createScene().then((scene) => {
     // Continually render the scene in an endless loop
