@@ -158,10 +158,10 @@ function buildRandomBox() {
     // Lift object so it is not embedded in surface
     mesh.position.y = size / 2;
 
-    // Freeze that position like your original code
+    // Freeze the mesh's transform so it can be efficiently duplicated when we create anchors 
     mesh.bakeCurrentTransformIntoVertices();
 
-    // Random colour (same style as your original)
+    // Random colour (same style as original)
     const boxMat = new BABYLON.StandardMaterial("boxMat", scene);
     boxMat.diffuseColor = new BABYLON.Color3(
         Math.random(),
